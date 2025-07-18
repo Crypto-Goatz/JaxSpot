@@ -462,9 +462,8 @@ export default function CryptoDashboard() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">JaxSpot Trading Pipeline</h1>
-              <p className="text-gray-600 mt-2">Automated crypto monitoring and trading signals</p>
+            <div className="flex items-center">
+              <img src="/jax-coinbase.png" alt="JAX Coinbase" className="h-12 w-auto" />
             </div>
             <div className="flex items-center gap-4">
               <div className="text-right">
