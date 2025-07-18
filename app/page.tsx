@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { TrendingUp, TrendingDown, Eye, ShoppingCart, CheckCircle, Activity } from "lucide-react"
+import { RightSidebar } from "@/components/right-sidebar"
 
 interface CoinData {
   id: string
@@ -457,153 +458,159 @@ export default function CryptoDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <img src="/jax-coinbase.png" alt="JAX Coinbase" className="h-12 w-auto" />
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-sm text-gray-500">Last Updated</p>
-                <p className="font-mono text-sm">{formatTime(lastUpdate)}</p>
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Main Content */}
+      <div className="flex-1 p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <img src="/jax-coinbase.png" alt="JAX Coinbase" className="h-12 w-auto" />
               </div>
-              <Button
-                variant={isLive ? "default" : "outline"}
-                onClick={() => setIsLive(!isLive)}
-                className="flex items-center gap-2"
-              >
-                <div className={`w-2 h-2 rounded-full ${isLive ? "bg-green-400" : "bg-gray-400"}`} />
-                {isLive ? "LIVE" : "PAUSED"}
-              </Button>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Last Updated</p>
+                  <p className="font-mono text-sm">{formatTime(lastUpdate)}</p>
+                </div>
+                <Button
+                  variant={isLive ? "default" : "outline"}
+                  onClick={() => setIsLive(!isLive)}
+                  className="flex items-center gap-2"
+                >
+                  <div className={`w-2 h-2 rounded-full ${isLive ? "bg-green-400" : "bg-gray-400"}`} />
+                  {isLive ? "LIVE" : "PAUSED"}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Pipeline Stages */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {Object.entries(stageConfig).map(([stageKey, config]) => {
-            const stageCoins = getStageCoins(stageKey as CoinData["stage"])
-            const StageIcon = config.icon
+          {/* Pipeline Stages */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {Object.entries(stageConfig).map(([stageKey, config]) => {
+              const stageCoins = getStageCoins(stageKey as CoinData["stage"])
+              const StageIcon = config.icon
 
-            return (
-              <Card key={stageKey} className="h-fit">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${config.color} text-white`}>
-                      <StageIcon className="w-5 h-5" />
+              return (
+                <Card key={stageKey} className="h-fit">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg ${config.color} text-white`}>
+                        <StageIcon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-semibold">{config.title}</CardTitle>
+                        <p className="text-xs text-gray-500">{config.description}</p>
+                      </div>
                     </div>
-                    <div>
-                      <CardTitle className="text-sm font-semibold">{config.title}</CardTitle>
-                      <p className="text-xs text-gray-500">{config.description}</p>
+                    <div className="flex items-center justify-between mt-2">
+                      <Badge variant="outline" className="text-xs">
+                        Score: {config.threshold}
+                      </Badge>
+                      <span className="text-sm font-medium">{stageCoins.length} coins</span>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <Badge variant="outline" className="text-xs">
-                      Score: {config.threshold}
-                    </Badge>
-                    <span className="text-sm font-medium">{stageCoins.length} coins</span>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {stageCoins.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="text-sm">No coins in this stage</p>
-                    </div>
-                  ) : (
-                    stageCoins.map((coin) => (
-                      <Card key={coin.id} className="p-3 bg-gray-50">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg font-bold text-blue-600">{coin.icon}</span>
-                            <div>
-                              <p className="font-semibold text-sm">{coin.name}</p>
-                              <p className="text-xs text-gray-500">{coin.symbol}</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {stageCoins.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <p className="text-sm">No coins in this stage</p>
+                      </div>
+                    ) : (
+                      stageCoins.map((coin) => (
+                        <Card key={coin.id} className="p-3 bg-gray-50">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-bold text-blue-600">{coin.icon}</span>
+                              <div>
+                                <p className="font-semibold text-sm">{coin.name}</p>
+                                <p className="text-xs text-gray-500">{coin.symbol}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-sm">{formatPrice(coin.price)}</p>
+                              <div className="flex items-center gap-1">
+                                {coin.change24h >= 0 ? (
+                                  <TrendingUp className="w-3 h-3 text-green-500" />
+                                ) : (
+                                  <TrendingDown className="w-3 h-3 text-red-500" />
+                                )}
+                                <span className={`text-xs ${coin.change24h >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                  {coin.change24h >= 0 ? "+" : ""}
+                                  {coin.change24h.toFixed(1)}%
+                                </span>
+                              </div>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="font-semibold text-sm">{formatPrice(coin.price)}</p>
-                            <div className="flex items-center gap-1">
-                              {coin.change24h >= 0 ? (
-                                <TrendingUp className="w-3 h-3 text-green-500" />
-                              ) : (
-                                <TrendingDown className="w-3 h-3 text-red-500" />
-                              )}
-                              <span className={`text-xs ${coin.change24h >= 0 ? "text-green-500" : "text-red-500"}`}>
-                                {coin.change24h >= 0 ? "+" : ""}
-                                {coin.change24h.toFixed(1)}%
-                              </span>
+
+                          <div className="mb-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs text-gray-500">JaxSpot Score</span>
+                              <span className="text-xs font-semibold">{coin.score}/100</span>
                             </div>
+                            <Progress value={coin.score} className="h-2" />
                           </div>
-                        </div>
 
-                        <div className="mb-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-500">JaxSpot Score</span>
-                            <span className="text-xs font-semibold">{coin.score}/100</span>
+                          <div className="space-y-1">
+                            <p className="text-xs text-gray-600">{coin.reasoning}</p>
+                            <div className="flex justify-between text-xs text-gray-500">
+                              <span>Vol: {coin.volume}</span>
+                              <span>MCap: {coin.marketCap}</span>
+                            </div>
+                            <p className="text-xs text-gray-400">Updated: {formatTime(coin.lastUpdated)}</p>
                           </div>
-                          <Progress value={coin.score} className="h-2" />
-                        </div>
+                        </Card>
+                      ))
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
 
-                        <div className="space-y-1">
-                          <p className="text-xs text-gray-600">{coin.reasoning}</p>
-                          <div className="flex justify-between text-xs text-gray-500">
-                            <span>Vol: {coin.volume}</span>
-                            <span>MCap: {coin.marketCap}</span>
-                          </div>
-                          <p className="text-xs text-gray-400">Updated: {formatTime(coin.lastUpdated)}</p>
-                        </div>
-                      </Card>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-
-        {/* Summary Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <Eye className="w-8 h-8 text-gray-500" />
-              <div>
-                <p className="text-2xl font-bold">{getStageCoins("scanning").length}</p>
-                <p className="text-sm text-gray-500">Scanning</p>
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
+            <Card className="p-4">
+              <div className="flex items-center gap-3">
+                <Eye className="w-8 h-8 text-gray-500" />
+                <div>
+                  <p className="text-2xl font-bold">{getStageCoins("scanning").length}</p>
+                  <p className="text-sm text-gray-500">Scanning</p>
+                </div>
               </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <Activity className="w-8 h-8 text-yellow-500" />
-              <div>
-                <p className="text-2xl font-bold">{getStageCoins("watchlist").length}</p>
-                <p className="text-sm text-gray-500">Watchlist</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-3">
+                <Activity className="w-8 h-8 text-yellow-500" />
+                <div>
+                  <p className="text-2xl font-bold">{getStageCoins("watchlist").length}</p>
+                  <p className="text-sm text-gray-500">Watchlist</p>
+                </div>
               </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <ShoppingCart className="w-8 h-8 text-orange-500" />
-              <div>
-                <p className="text-2xl font-bold">{getStageCoins("ready").length}</p>
-                <p className="text-sm text-gray-500">Ready to Buy</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-3">
+                <ShoppingCart className="w-8 h-8 text-orange-500" />
+                <div>
+                  <p className="text-2xl font-bold">{getStageCoins("ready").length}</p>
+                  <p className="text-sm text-gray-500">Ready to Buy</p>
+                </div>
               </div>
-            </div>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-8 h-8 text-green-500" />
-              <div>
-                <p className="text-2xl font-bold">{getStageCoins("purchased").length}</p>
-                <p className="text-sm text-gray-500">Purchased</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-8 h-8 text-green-500" />
+                <div>
+                  <p className="text-2xl font-bold">{getStageCoins("purchased").length}</p>
+                  <p className="text-sm text-gray-500">Purchased</p>
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
       </div>
+
+      {/* Right Sidebar */}
+      <RightSidebar />
     </div>
   )
 }
