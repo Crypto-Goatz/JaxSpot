@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { TrendingUp, TrendingDown, Eye, ShoppingCart, CheckCircle, Activity } from "lucide-react"
 import { RightSidebar } from "@/components/right-sidebar"
+import { StageFilter } from "@/components/stage-filter"
 
 interface CoinData {
   id: string
@@ -21,10 +22,12 @@ interface CoinData {
   volume: string
   marketCap: string
   lastUpdated: Date
+  recentlyMoved?: boolean
+  previousStage?: string
 }
 
 const initialCoins: CoinData[] = [
-  // STAGE 1: SCANNING
+  // STAGE 1: SCANNING (Purple)
   {
     id: "1",
     name: "Bitcoin",
@@ -110,7 +113,7 @@ const initialCoins: CoinData[] = [
     lastUpdated: new Date(),
   },
 
-  // STAGE 2: WATCHLIST
+  // STAGE 2: WATCHLIST (Yellow)
   {
     id: "2",
     name: "Ethereum",
@@ -196,7 +199,7 @@ const initialCoins: CoinData[] = [
     lastUpdated: new Date(),
   },
 
-  // STAGE 3: READY TO BUY
+  // STAGE 3: READY TO BUY (Orange)
   {
     id: "3",
     name: "Solana",
@@ -268,7 +271,7 @@ const initialCoins: CoinData[] = [
     lastUpdated: new Date(),
   },
 
-  // STAGE 4: PURCHASED
+  // STAGE 4: PURCHASED (Green)
   {
     id: "4",
     name: "Chainlink",
@@ -345,7 +348,8 @@ const stageConfig = {
   scanning: {
     title: "STAGE 1: SCANNING",
     icon: Eye,
-    color: "bg-gray-500",
+    color: "bg-purple-500",
+    glowColor: "shadow-purple-500/50",
     threshold: "< 60",
     description: "Monitoring market signals",
   },
@@ -353,6 +357,7 @@ const stageConfig = {
     title: "STAGE 2: WATCHLIST",
     icon: Activity,
     color: "bg-yellow-500",
+    glowColor: "shadow-yellow-500/50",
     threshold: "60-79",
     description: "High potential detected",
   },
@@ -360,6 +365,7 @@ const stageConfig = {
     title: "STAGE 3: READY TO BUY",
     icon: ShoppingCart,
     color: "bg-orange-500",
+    glowColor: "shadow-orange-500/50",
     threshold: "80-94",
     description: "Optimal entry conditions",
   },
@@ -367,6 +373,7 @@ const stageConfig = {
     title: "STAGE 4: PURCHASED",
     icon: CheckCircle,
     color: "bg-green-500",
+    glowColor: "shadow-green-500/50",
     threshold: "95+",
     description: "Position active",
   },
@@ -376,8 +383,10 @@ export default function CryptoDashboard() {
   const [coins, setCoins] = useState<CoinData[]>(initialCoins)
   const [lastUpdate, setLastUpdate] = useState(new Date())
   const [isLive, setIsLive] = useState(true)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [activeStageFilter, setActiveStageFilter] = useState<string | null>(null)
 
-  // Simulate real-time updates
+  // Simulate real-time updates with stage movement detection
   useEffect(() => {
     if (!isLive) return
 
@@ -394,9 +403,13 @@ export default function CryptoDashboard() {
           else if (newScore >= 80) newStage = "ready"
           else if (newScore >= 60) newStage = "watchlist"
 
+          // Check if stage changed
+          const stageChanged = newStage !== coin.stage
+          const previousStage = coin.stage
+
           // Update reasoning based on stage
           let newReasoning = coin.reasoning
-          if (newStage !== coin.stage) {
+          if (stageChanged) {
             switch (newStage) {
               case "scanning":
                 newReasoning = "Score dropped below threshold, monitoring for re-entry"
@@ -426,17 +439,44 @@ export default function CryptoDashboard() {
             price: newPrice,
             change24h: newChange24h,
             lastUpdated: new Date(),
+            recentlyMoved: stageChanged,
+            previousStage: stageChanged ? previousStage : coin.previousStage,
           }
         }),
       )
       setLastUpdate(new Date())
+
+      // Clear recently moved flag after 10 seconds
+      setTimeout(() => {
+        setCoins((prevCoins) =>
+          prevCoins.map((coin) => ({
+            ...coin,
+            recentlyMoved: false,
+          })),
+        )
+      }, 10000)
     }, 5000) // Update every 5 seconds
 
     return () => clearInterval(interval)
   }, [isLive])
 
-  const getStageCoins = (stage: CoinData["stage"]) => {
+  const getStageCoins = (stage?: CoinData["stage"]) => {
+    if (!stage) return coins
     return coins.filter((coin) => coin.stage === stage)
+  }
+
+  const getFilteredCoins = () => {
+    if (!activeStageFilter) return coins
+    return coins.filter((coin) => coin.stage === activeStageFilter)
+  }
+
+  const getStageCounts = () => {
+    return {
+      scanning: coins.filter((coin) => coin.stage === "scanning").length,
+      watchlist: coins.filter((coin) => coin.stage === "watchlist").length,
+      ready: coins.filter((coin) => coin.stage === "ready").length,
+      purchased: coins.filter((coin) => coin.stage === "purchased").length,
+    }
   }
 
   const formatPrice = (price: number) => {
@@ -457,160 +497,254 @@ export default function CryptoDashboard() {
     })
   }
 
+  const filteredCoins = getFilteredCoins()
+  const stageCounts = getStageCounts()
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Main Content */}
-      <div className="flex-1 p-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <img src="/jax-coinbase.png" alt="JAX Coinbase" className="h-12 w-auto" />
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right">
-                  <p className="text-sm text-gray-500">Last Updated</p>
-                  <p className="font-mono text-sm">{formatTime(lastUpdate)}</p>
+      <div className="flex-1 transition-all duration-300 ease-in-out">
+        <div className="p-4 lg:p-6">
+          <div className="max-w-full mx-auto">
+            {/* Header */}
+            <div className="mb-6 lg:mb-8">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div className="flex items-center">
+                  <img src="/jax-coinbase.png" alt="JAX Coinbase" className="h-8 lg:h-12 w-auto" />
                 </div>
-                <Button
-                  variant={isLive ? "default" : "outline"}
-                  onClick={() => setIsLive(!isLive)}
-                  className="flex items-center gap-2"
-                >
-                  <div className={`w-2 h-2 rounded-full ${isLive ? "bg-green-400" : "bg-gray-400"}`} />
-                  {isLive ? "LIVE" : "PAUSED"}
-                </Button>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-sm text-gray-500">Last Updated</p>
+                    <p className="font-mono text-sm">{formatTime(lastUpdate)}</p>
+                  </div>
+                  <Button
+                    variant={isLive ? "default" : "outline"}
+                    onClick={() => setIsLive(!isLive)}
+                    className="flex items-center gap-2 transition-all duration-200"
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full transition-colors ${isLive ? "bg-green-400 animate-pulse" : "bg-gray-400"}`}
+                    />
+                    {isLive ? "LIVE" : "PAUSED"}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Pipeline Stages */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {Object.entries(stageConfig).map(([stageKey, config]) => {
-              const stageCoins = getStageCoins(stageKey as CoinData["stage"])
-              const StageIcon = config.icon
+            {/* Stage Filter */}
+            <StageFilter
+              activeStage={activeStageFilter}
+              onStageChange={setActiveStageFilter}
+              stageCounts={stageCounts}
+            />
 
-              return (
-                <Card key={stageKey} className="h-fit">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${config.color} text-white`}>
-                        <StageIcon className="w-5 h-5" />
+            {/* Pipeline Stages */}
+            {activeStageFilter ? (
+              // Single stage view
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
+                {filteredCoins.map((coin) => {
+                  const config = stageConfig[coin.stage]
+                  return (
+                    <Card
+                      key={coin.id}
+                      className={`p-4 bg-gray-50 transition-all duration-300 hover:shadow-lg transform hover:scale-105 ${
+                        coin.recentlyMoved
+                          ? `animate-pulse shadow-2xl ${config.glowColor} border-2 border-${coin.stage === "scanning" ? "purple" : coin.stage === "watchlist" ? "yellow" : coin.stage === "ready" ? "orange" : "green"}-400`
+                          : ""
+                      }`}
+                    >
+                      {coin.recentlyMoved && (
+                        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-bounce">
+                          MOVED!
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-blue-600">{coin.icon}</span>
+                          <div>
+                            <p className="font-semibold text-sm">{coin.name}</p>
+                            <p className="text-xs text-gray-500">{coin.symbol}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-sm">{formatPrice(coin.price)}</p>
+                          <div className="flex items-center gap-1">
+                            {coin.change24h >= 0 ? (
+                              <TrendingUp className="w-3 h-3 text-green-500" />
+                            ) : (
+                              <TrendingDown className="w-3 h-3 text-red-500" />
+                            )}
+                            <span className={`text-xs ${coin.change24h >= 0 ? "text-green-500" : "text-red-500"}`}>
+                              {coin.change24h >= 0 ? "+" : ""}
+                              {coin.change24h.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <CardTitle className="text-sm font-semibold">{config.title}</CardTitle>
-                        <p className="text-xs text-gray-500">{config.description}</p>
+
+                      <div className="mb-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-gray-500">JaxSpot Score</span>
+                          <span className="text-xs font-semibold">{coin.score}/100</span>
+                        </div>
+                        <Progress value={coin.score} className="h-2" />
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <Badge variant="outline" className="text-xs">
-                        Score: {config.threshold}
-                      </Badge>
-                      <span className="text-sm font-medium">{stageCoins.length} coins</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {stageCoins.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">
-                        <p className="text-sm">No coins in this stage</p>
+
+                      <div className="space-y-1">
+                        <p className="text-xs text-gray-600">{coin.reasoning}</p>
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>Vol: {coin.volume}</span>
+                          <span>MCap: {coin.marketCap}</span>
+                        </div>
+                        <p className="text-xs text-gray-400">Updated: {formatTime(coin.lastUpdated)}</p>
                       </div>
-                    ) : (
-                      stageCoins.map((coin) => (
-                        <Card key={coin.id} className="p-3 bg-gray-50">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg font-bold text-blue-600">{coin.icon}</span>
-                              <div>
-                                <p className="font-semibold text-sm">{coin.name}</p>
-                                <p className="text-xs text-gray-500">{coin.symbol}</p>
+                    </Card>
+                  )
+                })}
+              </div>
+            ) : (
+              // All stages view
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
+                {Object.entries(stageConfig).map(([stageKey, config]) => {
+                  const stageCoins = getStageCoins(stageKey as CoinData["stage"])
+                  const StageIcon = config.icon
+
+                  return (
+                    <Card key={stageKey} className="h-fit transition-all duration-300 hover:shadow-lg">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${config.color} text-white`}>
+                            <StageIcon className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-sm font-semibold">{config.title}</CardTitle>
+                            <p className="text-xs text-gray-500">{config.description}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-2">
+                          <Badge variant="outline" className="text-xs">
+                            Score: {config.threshold}
+                          </Badge>
+                          <span className="text-sm font-medium">{stageCoins.length} coins</span>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3 max-h-96 overflow-y-auto">
+                        {stageCoins.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500">
+                            <p className="text-sm">No coins in this stage</p>
+                          </div>
+                        ) : (
+                          stageCoins.map((coin) => (
+                            <Card
+                              key={coin.id}
+                              className={`p-3 bg-gray-50 transition-all duration-300 hover:shadow-md transform hover:scale-102 ${
+                                coin.recentlyMoved
+                                  ? `animate-pulse shadow-xl ${config.glowColor} border-2 border-current relative`
+                                  : ""
+                              }`}
+                            >
+                              {coin.recentlyMoved && (
+                                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded-full animate-bounce text-[10px]">
+                                  NEW
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-lg font-bold text-blue-600">{coin.icon}</span>
+                                  <div>
+                                    <p className="font-semibold text-sm">{coin.name}</p>
+                                    <p className="text-xs text-gray-500">{coin.symbol}</p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-semibold text-sm">{formatPrice(coin.price)}</p>
+                                  <div className="flex items-center gap-1">
+                                    {coin.change24h >= 0 ? (
+                                      <TrendingUp className="w-3 h-3 text-green-500" />
+                                    ) : (
+                                      <TrendingDown className="w-3 h-3 text-red-500" />
+                                    )}
+                                    <span
+                                      className={`text-xs ${coin.change24h >= 0 ? "text-green-500" : "text-red-500"}`}
+                                    >
+                                      {coin.change24h >= 0 ? "+" : ""}
+                                      {coin.change24h.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-semibold text-sm">{formatPrice(coin.price)}</p>
-                              <div className="flex items-center gap-1">
-                                {coin.change24h >= 0 ? (
-                                  <TrendingUp className="w-3 h-3 text-green-500" />
-                                ) : (
-                                  <TrendingDown className="w-3 h-3 text-red-500" />
-                                )}
-                                <span className={`text-xs ${coin.change24h >= 0 ? "text-green-500" : "text-red-500"}`}>
-                                  {coin.change24h >= 0 ? "+" : ""}
-                                  {coin.change24h.toFixed(1)}%
-                                </span>
+
+                              <div className="mb-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-gray-500">JaxSpot Score</span>
+                                  <span className="text-xs font-semibold">{coin.score}/100</span>
+                                </div>
+                                <Progress value={coin.score} className="h-2" />
                               </div>
-                            </div>
-                          </div>
 
-                          <div className="mb-2">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs text-gray-500">JaxSpot Score</span>
-                              <span className="text-xs font-semibold">{coin.score}/100</span>
-                            </div>
-                            <Progress value={coin.score} className="h-2" />
-                          </div>
+                              <div className="space-y-1">
+                                <p className="text-xs text-gray-600">{coin.reasoning}</p>
+                                <div className="flex justify-between text-xs text-gray-500">
+                                  <span>Vol: {coin.volume}</span>
+                                  <span>MCap: {coin.marketCap}</span>
+                                </div>
+                                <p className="text-xs text-gray-400">Updated: {formatTime(coin.lastUpdated)}</p>
+                              </div>
+                            </Card>
+                          ))
+                        )}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
 
-                          <div className="space-y-1">
-                            <p className="text-xs text-gray-600">{coin.reasoning}</p>
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>Vol: {coin.volume}</span>
-                              <span>MCap: {coin.marketCap}</span>
-                            </div>
-                            <p className="text-xs text-gray-400">Updated: {formatTime(coin.lastUpdated)}</p>
-                          </div>
-                        </Card>
-                      ))
-                    )}
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-
-          {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-8">
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <Eye className="w-8 h-8 text-gray-500" />
-                <div>
-                  <p className="text-2xl font-bold">{getStageCoins("scanning").length}</p>
-                  <p className="text-sm text-gray-500">Scanning</p>
+            {/* Summary Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 lg:mt-8">
+              <Card className="p-4 transition-all duration-300 hover:shadow-lg transform hover:scale-105">
+                <div className="flex items-center gap-3">
+                  <Eye className="w-6 lg:w-8 h-6 lg:h-8 text-purple-500" />
+                  <div>
+                    <p className="text-xl lg:text-2xl font-bold">{stageCounts.scanning}</p>
+                    <p className="text-xs lg:text-sm text-gray-500">Scanning</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <Activity className="w-8 h-8 text-yellow-500" />
-                <div>
-                  <p className="text-2xl font-bold">{getStageCoins("watchlist").length}</p>
-                  <p className="text-sm text-gray-500">Watchlist</p>
+              </Card>
+              <Card className="p-4 transition-all duration-300 hover:shadow-lg transform hover:scale-105">
+                <div className="flex items-center gap-3">
+                  <Activity className="w-6 lg:w-8 h-6 lg:h-8 text-yellow-500" />
+                  <div>
+                    <p className="text-xl lg:text-2xl font-bold">{stageCounts.watchlist}</p>
+                    <p className="text-xs lg:text-sm text-gray-500">Watchlist</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="w-8 h-8 text-orange-500" />
-                <div>
-                  <p className="text-2xl font-bold">{getStageCoins("ready").length}</p>
-                  <p className="text-sm text-gray-500">Ready to Buy</p>
+              </Card>
+              <Card className="p-4 transition-all duration-300 hover:shadow-lg transform hover:scale-105">
+                <div className="flex items-center gap-3">
+                  <ShoppingCart className="w-6 lg:w-8 h-6 lg:h-8 text-orange-500" />
+                  <div>
+                    <p className="text-xl lg:text-2xl font-bold">{stageCounts.ready}</p>
+                    <p className="text-xs lg:text-sm text-gray-500">Ready to Buy</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
-            <Card className="p-4">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-8 h-8 text-green-500" />
-                <div>
-                  <p className="text-2xl font-bold">{getStageCoins("purchased").length}</p>
-                  <p className="text-sm text-gray-500">Purchased</p>
+              </Card>
+              <Card className="p-4 transition-all duration-300 hover:shadow-lg transform hover:scale-105">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-6 lg:w-8 h-6 lg:h-8 text-green-500" />
+                  <div>
+                    <p className="text-xl lg:text-2xl font-bold">{stageCounts.purchased}</p>
+                    <p className="text-xs lg:text-sm text-gray-500">Purchased</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Right Sidebar */}
-      <RightSidebar />
+      <RightSidebar isCollapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
     </div>
   )
 }
