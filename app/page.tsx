@@ -1,13 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { TrendingUp, TrendingDown, Eye, ShoppingCart, CheckCircle, Activity } from "lucide-react"
-import { RightSidebar } from "@/components/right-sidebar"
+import { TrendingUp, TrendingDown, Eye, ShoppingCart, CheckCircle, Activity, Lock, Crown } from "lucide-react"
+import { PlatformNavigation } from "@/components/platform-navigation"
 import { StageFilter } from "@/components/stage-filter"
+import { audioManager } from "@/lib/audio-manager"
+import { useAuth } from "@/lib/auth-context"
 
 interface CoinData {
   id: string
@@ -379,20 +381,52 @@ const stageConfig = {
   },
 }
 
+const getStageOrder = (stage: string): number => {
+  const order = { scanning: 1, watchlist: 2, ready: 3, purchased: 4 }
+  return order[stage as keyof typeof order] || 0
+}
+
 export default function CryptoDashboard() {
   const [coins, setCoins] = useState<CoinData[]>(initialCoins)
   const [lastUpdate, setLastUpdate] = useState(new Date())
   const [isLive, setIsLive] = useState(true)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeStageFilter, setActiveStageFilter] = useState<string | null>(null)
+  const previousCoinsRef = useRef<CoinData[]>(initialCoins)
 
-  // Simulate real-time updates with stage movement detection
+  const { user, isAuthenticated } = useAuth()
+
+  // Check if user has access to premium stages (3 & 4)
+  const hasPremiumAccess = () => {
+    if (!isAuthenticated || !user) return false
+    return user.membershipTier !== "free"
+  }
+
+  // Initialize audio settings from localStorage
+  useEffect(() => {
+    const audioEnabled = localStorage.getItem("audioEnabled")
+    const audioVolume = localStorage.getItem("audioVolume")
+
+    // Default audio to OFF
+    if (audioEnabled !== null) {
+      audioManager.setEnabled(audioEnabled === "true")
+    } else {
+      audioManager.setEnabled(false)
+      localStorage.setItem("audioEnabled", "false")
+    }
+
+    if (audioVolume !== null) {
+      audioManager.setVolume(Number.parseFloat(audioVolume))
+    }
+  }, [])
+
+  // Simulate real-time updates with stage movement detection and audio alerts
   useEffect(() => {
     if (!isLive) return
 
     const interval = setInterval(() => {
-      setCoins((prevCoins) =>
-        prevCoins.map((coin) => {
+      setCoins((prevCoins) => {
+        const newCoins = prevCoins.map((coin) => {
           // Simulate score changes
           const scoreChange = (Math.random() - 0.5) * 10
           const newScore = Math.max(0, Math.min(100, coin.score + scoreChange))
@@ -406,6 +440,25 @@ export default function CryptoDashboard() {
           // Check if stage changed
           const stageChanged = newStage !== coin.stage
           const previousStage = coin.stage
+
+          // Play audio alert for stage changes (only if user has premium access)
+          if (stageChanged && isAuthenticated && user && user.membershipTier !== "free") {
+            const previousOrder = getStageOrder(previousStage)
+            const newOrder = getStageOrder(newStage)
+
+            if (newOrder > previousOrder) {
+              // Stage upgrade
+              audioManager.playStageUpgrade(previousStage, newStage)
+            } else {
+              // Stage downgrade
+              audioManager.playStageDowngrade(previousStage, newStage)
+            }
+
+            // Special alert for reaching high score
+            if (newScore >= 95 && coin.score < 95) {
+              setTimeout(() => audioManager.playHighScoreAlert(), 500)
+            }
+          }
 
           // Update reasoning based on stage
           let newReasoning = coin.reasoning
@@ -442,8 +495,12 @@ export default function CryptoDashboard() {
             recentlyMoved: stageChanged,
             previousStage: stageChanged ? previousStage : coin.previousStage,
           }
-        }),
-      )
+        })
+
+        // Store previous coins for comparison
+        previousCoinsRef.current = prevCoins
+        return newCoins
+      })
       setLastUpdate(new Date())
 
       // Clear recently moved flag after 10 seconds
@@ -497,6 +554,10 @@ export default function CryptoDashboard() {
     })
   }
 
+  const isStageBlocked = (stage: string) => {
+    return !hasPremiumAccess() && (stage === "ready" || stage === "purchased")
+  }
+
   const filteredCoins = getFilteredCoins()
   const stageCounts = getStageCounts()
 
@@ -544,20 +605,38 @@ export default function CryptoDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
                 {filteredCoins.map((coin) => {
                   const config = stageConfig[coin.stage]
+                  const isBlocked = isStageBlocked(coin.stage)
+
                   return (
                     <Card
                       key={coin.id}
-                      className={`p-4 bg-gray-50 transition-all duration-300 hover:shadow-lg transform hover:scale-105 ${
-                        coin.recentlyMoved
+                      className={`p-4 bg-gray-50 transition-all duration-300 hover:shadow-lg transform hover:scale-105 relative ${
+                        coin.recentlyMoved && !isBlocked
                           ? `animate-pulse shadow-2xl ${config.glowColor} border-2 border-${coin.stage === "scanning" ? "purple" : coin.stage === "watchlist" ? "yellow" : coin.stage === "ready" ? "orange" : "green"}-400`
                           : ""
-                      }`}
+                      } ${isBlocked ? "blur-sm" : ""}`}
                     >
-                      {coin.recentlyMoved && (
-                        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-bounce">
+                      {isBlocked && (
+                        <div className="absolute inset-0 bg-black/20 rounded-lg flex items-center justify-center z-10">
+                          <div className="text-center">
+                            <Lock className="w-8 h-8 text-white mx-auto mb-2" />
+                            <Button
+                              onClick={() => (window.location.href = "/pricing")}
+                              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-2 rounded-lg shadow-lg"
+                            >
+                              <Crown className="w-4 h-4 mr-2" />
+                              Join the Herd
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {coin.recentlyMoved && !isBlocked && (
+                        <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-bounce z-10">
                           MOVED!
                         </div>
                       )}
+
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <span className="text-lg font-bold text-blue-600">{coin.icon}</span>
@@ -591,7 +670,9 @@ export default function CryptoDashboard() {
                       </div>
 
                       <div className="space-y-1">
-                        <p className="text-xs text-gray-600">{coin.reasoning}</p>
+                        <p className="text-xs text-gray-600">
+                          {isBlocked ? "Premium content - upgrade to view" : coin.reasoning}
+                        </p>
                         <div className="flex justify-between text-xs text-gray-500">
                           <span>Vol: {coin.volume}</span>
                           <span>MCap: {coin.marketCap}</span>
@@ -608,9 +689,28 @@ export default function CryptoDashboard() {
                 {Object.entries(stageConfig).map(([stageKey, config]) => {
                   const stageCoins = getStageCoins(stageKey as CoinData["stage"])
                   const StageIcon = config.icon
+                  const isBlocked = isStageBlocked(stageKey)
 
                   return (
-                    <Card key={stageKey} className="h-fit transition-all duration-300 hover:shadow-lg">
+                    <Card
+                      key={stageKey}
+                      className={`h-fit transition-all duration-300 hover:shadow-lg relative ${isBlocked ? "blur-sm" : ""}`}
+                    >
+                      {isBlocked && (
+                        <div className="absolute inset-0 bg-black/20 rounded-lg flex items-center justify-center z-10">
+                          <div className="text-center">
+                            <Lock className="w-8 h-8 text-white mx-auto mb-2" />
+                            <Button
+                              onClick={() => (window.location.href = "/pricing")}
+                              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-lg shadow-lg"
+                            >
+                              <Crown className="w-4 h-4 mr-2" />
+                              Join the Herd
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
                       <CardHeader className="pb-3">
                         <div className="flex items-center gap-3">
                           <div className={`p-2 rounded-lg ${config.color} text-white`}>
@@ -637,14 +737,14 @@ export default function CryptoDashboard() {
                           stageCoins.map((coin) => (
                             <Card
                               key={coin.id}
-                              className={`p-3 bg-gray-50 transition-all duration-300 hover:shadow-md transform hover:scale-102 ${
-                                coin.recentlyMoved
-                                  ? `animate-pulse shadow-xl ${config.glowColor} border-2 border-current relative`
+                              className={`p-3 bg-gray-50 transition-all duration-300 hover:shadow-md transform hover:scale-102 relative ${
+                                coin.recentlyMoved && !isBlocked
+                                  ? `animate-pulse shadow-xl ${config.glowColor} border-2 border-current`
                                   : ""
                               }`}
                             >
-                              {coin.recentlyMoved && (
-                                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded-full animate-bounce text-[10px]">
+                              {coin.recentlyMoved && !isBlocked && (
+                                <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded-full animate-bounce text-[10px] z-10">
                                   NEW
                                 </div>
                               )}
@@ -683,7 +783,9 @@ export default function CryptoDashboard() {
                               </div>
 
                               <div className="space-y-1">
-                                <p className="text-xs text-gray-600">{coin.reasoning}</p>
+                                <p className="text-xs text-gray-600">
+                                  {isBlocked ? "Premium content - upgrade to view" : coin.reasoning}
+                                </p>
                                 <div className="flex justify-between text-xs text-gray-500">
                                   <span>Vol: {coin.volume}</span>
                                   <span>MCap: {coin.marketCap}</span>
@@ -720,7 +822,14 @@ export default function CryptoDashboard() {
                   </div>
                 </div>
               </Card>
-              <Card className="p-4 transition-all duration-300 hover:shadow-lg transform hover:scale-105">
+              <Card
+                className={`p-4 transition-all duration-300 hover:shadow-lg transform hover:scale-105 relative ${!hasPremiumAccess() ? "blur-sm" : ""}`}
+              >
+                {!hasPremiumAccess() && (
+                  <div className="absolute inset-0 bg-black/20 rounded-lg flex items-center justify-center z-10">
+                    <Lock className="w-4 h-4 text-white" />
+                  </div>
+                )}
                 <div className="flex items-center gap-3">
                   <ShoppingCart className="w-6 lg:w-8 h-6 lg:h-8 text-orange-500" />
                   <div>
@@ -729,7 +838,14 @@ export default function CryptoDashboard() {
                   </div>
                 </div>
               </Card>
-              <Card className="p-4 transition-all duration-300 hover:shadow-lg transform hover:scale-105">
+              <Card
+                className={`p-4 transition-all duration-300 hover:shadow-lg transform hover:scale-105 relative ${!hasPremiumAccess() ? "blur-sm" : ""}`}
+              >
+                {!hasPremiumAccess() && (
+                  <div className="absolute inset-0 bg-black/20 rounded-lg flex items-center justify-center z-10">
+                    <Lock className="w-4 h-4 text-white" />
+                  </div>
+                )}
                 <div className="flex items-center gap-3">
                   <CheckCircle className="w-6 lg:w-8 h-6 lg:h-8 text-green-500" />
                   <div>
@@ -743,8 +859,12 @@ export default function CryptoDashboard() {
         </div>
       </div>
 
-      {/* Right Sidebar */}
-      <RightSidebar isCollapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
+      {/* Platform Navigation */}
+      <PlatformNavigation
+        isCollapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        currentAppId="crypto-dashboard"
+      />
     </div>
   )
 }
